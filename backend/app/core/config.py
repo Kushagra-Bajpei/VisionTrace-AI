@@ -62,8 +62,6 @@ class Settings(BaseSettings):
     crops_storage_dir: str = "storage/crops"
     mock_embeddings: bool = False
     models_dir: str = "storage/models"
-    gemini_api_key: str = ""
-    openai_api_key: str = ""
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
