@@ -1,0 +1,7 @@
+{
+  "git.enabled": false,
+  "git.decorations.enabled": false,
+  "git.autofetch": false,
+  "explorer.decorations.badges": false,
+  "explorer.decorations.colors": false
+}

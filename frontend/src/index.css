@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Surveillance Intelligence Dark Palette ────────────────────────────── */
+  --color-background: #080b10;
+  --color-surface:    #0d131c;
+  --color-surface-2:  #141c28;
+  --color-surface-3:  #1b2536;
+  --color-border:     #1d2839;
+  --color-border-2:   #29384e;
+  --color-border-accent: rgba(0, 229, 255, 0.35);
+
+  /* Electric Cyan Accent */
+  --color-accent:        #00e5ff;
+  --color-accent-dim:    #00b4d8;
+  --color-accent-subtle: rgba(0, 229, 255, 0.08);
+  --color-accent-glow:   rgba(0, 229, 255, 0.22);
+
+  /* High Contrast Text */
+  --color-text-primary:   #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted:     #64748b;
+
+  /* Telemetry Status Colors */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger:  #ef4444;
+  --color-info:    #38bdf8;
+
+  /* Typography */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+}
+
+/* ── Base resets & smoothing ────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-color: var(--color-border);
+}
+
+html {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Subtle Tactical Grid Pattern ────────────────────────────────────────── */
+.tactical-grid {
+  background-image: 
+    linear-gradient(to right, rgba(29, 40, 57, 0.15) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(29, 40, 57, 0.15) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ── Enterprise Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-2);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ── Focus Outline ──────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* ── Selection ──────────────────────────────────────────────────────────── */
+::selection {
+  background-color: rgba(0, 229, 255, 0.25);
+  color: #ffffff;
+}
+
+/* ── Animations ─────────────────────────────────────────────────────────── */
+@keyframes pulse-cyan {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.15); }
+}
+
+.animate-pulse-cyan {
+  animation: pulse-cyan 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ── Hide scrollbar utilities ───────────────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

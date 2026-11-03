@@ -1,0 +1,75 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: visiontrace_db
+    environment:
+      POSTGRES_USER: visiontrace
+      POSTGRES_PASSWORD: visiontrace
+      POSTGRES_DB: visiontrace_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U visiontrace -d visiontrace_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: visiontrace_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend API ────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: visiontrace_api
+    env_file: ./backend/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./storage:/app/storage
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+  frontend:
+    image: node:20-alpine
+    container_name: visiontrace_frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install -g pnpm && pnpm install && pnpm dev --host"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+
+# NOTE:
+# This docker-compose is provided for convenience.
+# For Phase 1 local development, run services manually:
+#   docker-compose up db redis
+#   cd backend && uvicorn app.main:app --reload
+#   cd frontend && pnpm dev
