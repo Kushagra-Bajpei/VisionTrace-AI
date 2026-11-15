@@ -55,7 +55,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+      className="fixed inset-0 z-50 overflow-y-auto overscroll-contain scrollbar-tactical"
       role="dialog"
       aria-modal="true"
     >
@@ -66,43 +66,48 @@ export function Modal({
         aria-hidden="true"
       />
 
-      {/* Modal Surface */}
-      <div
-        className={cn(
-          'relative w-full rounded-xl border border-[var(--color-border-2)] bg-[var(--color-surface)] shadow-2xl transition-all duration-200 overflow-hidden flex flex-col max-h-[92vh]',
-          maxWidthClasses[maxWidth],
-          className,
-        )}
-      >
-        {/* Header */}
-        {(title || subtitle) && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/50 shrink-0">
-            <div>
-              {title && (
-                <h3 className="text-sm font-bold font-mono tracking-wide uppercase text-[var(--color-text-primary)]">
-                  {title}
-                </h3>
-              )}
-              {subtitle && (
-                <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-                  {subtitle}
-                </p>
-              )}
+      {/* Centering wrapper that allows natural scrolling when content exceeds viewport */}
+      <div className="flex min-h-full items-center justify-center p-2 sm:p-4 md:p-6 text-center">
+        {/* Modal Surface */}
+        <div
+          className={cn(
+            'relative w-full text-left rounded-xl border border-[var(--color-border-2)] bg-[var(--color-surface)] shadow-2xl transition-all duration-200 overflow-hidden flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] my-auto',
+            maxWidthClasses[maxWidth],
+            className,
+          )}
+        >
+          {/* Header */}
+          {(title || subtitle) && (
+            <div className="sticky top-0 z-20 flex items-center justify-between px-5 py-3 sm:px-6 sm:py-3.5 border-b border-[var(--color-border)] bg-[var(--color-surface-2)]/90 backdrop-blur-md shrink-0">
+              <div>
+                {title && (
+                  <h3 className="text-sm font-bold font-mono tracking-wide uppercase text-[var(--color-text-primary)]">
+                    {title}
+                  </h3>
+                )}
+                {subtitle && (
+                  <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+                    {subtitle}
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onClose}
+                aria-label="Close modal"
+                className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-3)]"
+              >
+                <X className="w-4 h-4" />
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onClose}
-              aria-label="Close modal"
-              className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-3)]"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        )}
+          )}
 
-        {/* Content body */}
-        <div className="overflow-y-auto p-6 flex-1">{children}</div>
+          {/* Content body */}
+          <div className="overflow-y-auto p-4 sm:p-5 flex-1 overscroll-contain scrollbar-tactical">
+            {children}
+          </div>
+        </div>
       </div>
     </div>
   )

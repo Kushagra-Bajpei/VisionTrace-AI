@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Loading'
 import { useApiHealth, useDetailedHealth } from '@/hooks/useApiHealth'
 import { videoService } from '@/services/video'
-import { formatBytes, formatDuration, formatRelativeTime, getResolutionLabel } from '@/lib/utils'
+import { formatBytes, formatDuration, formatRelativeTime, getResolutionLabel, withAuthToken } from '@/lib/utils'
 import { Link } from 'react-router-dom'
 
 interface StatCardProps {
@@ -197,7 +197,7 @@ export function DashboardPage() {
                     <div className="relative w-24 aspect-video rounded bg-black shrink-0 overflow-hidden">
                       {v.thumbnail_path ? (
                         <img
-                          src={videoService.getThumbnailUrl(v.id)}
+                          src={withAuthToken(videoService.getThumbnailUrl(v.id))}
                           alt=""
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                         />

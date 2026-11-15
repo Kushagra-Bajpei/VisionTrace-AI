@@ -278,24 +278,44 @@ def validate_media_request(
     resource_type: str,
     resource_id: str,
     request: Request,
-    authorization: Optional[str] = Header(None),
-    media_token: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    authorization: Optional[str] = None,
+    media_token: Optional[str] = None,
+    token: Optional[str] = None,
+    db: Optional[Session] = None,
 ) -> User:
     """
     Validates that the incoming request has either:
-    1. A valid Bearer access token, OR
+    1. A valid Bearer access token (via header or query param), OR
     2. A tightly scoped media token matching the exact requested resource.
     """
     token_str = None
     is_media_token = False
 
-    if authorization and authorization.startswith("Bearer "):
+    if authorization and isinstance(authorization, str) and authorization.startswith("Bearer "):
         token_str = authorization.split("Bearer ", 1)[1].strip()
-    elif media_token:
+    elif media_token and isinstance(media_token, str):
         token_str = media_token.strip()
         is_media_token = True
+    elif token and isinstance(token, str):
+        token_str = token.strip()
+        is_media_token = False
     else:
+        # Fall back to inspecting request query parameters directly
+        req_media_tok = request.query_params.get("media_token")
+        req_tok = request.query_params.get("token")
+        if req_media_tok:
+            token_str = req_media_tok.strip()
+            is_media_token = True
+        elif req_tok:
+            token_str = req_tok.strip()
+            is_media_token = False
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Media access requires authorization or a scoped media token.",
+            )
+
+    if not token_str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Media access requires authorization or a scoped media token.",
@@ -310,13 +330,8 @@ def validate_media_request(
     if is_token_revoked(db, jti):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked.")
 
-    if is_media_token:
-        if payload.get("token_type") != "media":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Expected a media token in query parameter.",
-            )
-        # Verify resource scoping
+    if payload.get("token_type") == "media":
+        # Verify resource scoping for media tokens
         tok_type = payload.get("resource_type")
         tok_id = payload.get("resource_id")
         if tok_type != resource_type.lower() or tok_id != str(resource_id):
@@ -324,6 +339,11 @@ def validate_media_request(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Media token is not authorized for this specific resource.",
             )
+    elif is_media_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Expected a media token in query parameter.",
+        )
 
     user_id_str = payload.get("sub")
     user = db.query(User).filter(User.id == uuid.UUID(user_id_str)).first()

@@ -13,6 +13,13 @@ import type {
 
 export const authService = {
   /**
+   * Retrieves active access token from persistent storage.
+   */
+  getToken(): string | null {
+    return localStorage.getItem('visiontrace_token')
+  },
+
+  /**
    * Initial setup: Bootstrap first administrator.
    */
   async bootstrapAdmin(payload: { email: string; password: string; full_name?: string }): Promise<TokenResponse> {

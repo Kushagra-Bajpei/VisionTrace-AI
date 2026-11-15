@@ -72,7 +72,7 @@ def create_app() -> FastAPI:
             "health": "/api/v1/health",
         }
 
-    # ── Startup log ───────────────────────────────────────────────────────────
+    # ── Startup & Shutdown ───────────────────────────────────────────────────
     @app.on_event("startup")
     async def on_startup():
         logger.info(
@@ -87,6 +87,15 @@ def create_app() -> FastAPI:
             logger.info(" Database status: %s", msg)
         else:
             logger.warning("⚠️ Database connection check: %s", msg)
+
+        # Initialize MongoDB Atlas connection
+        from app.db.mongodb import connect_to_mongo
+        await connect_to_mongo()
+
+    @app.on_event("shutdown")
+    async def on_shutdown():
+        from app.db.mongodb import close_mongo_connection
+        await close_mongo_connection()
 
     return app
 

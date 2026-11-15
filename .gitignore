@@ -89,6 +89,8 @@ storage/clips/*
 !storage/clips/.gitkeep
 storage/reports/*
 !storage/reports/.gitkeep
+storage/temp/*
+!storage/temp/.gitkeep
 storage/temp_chrome_profile/
 
 # ── 6. Computer Vision & Deep Learning Weights ─────────────────────────────────

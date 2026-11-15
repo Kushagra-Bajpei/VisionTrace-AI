@@ -5,12 +5,14 @@
  * tactical bounding box keyframe overlays, and seekable track timelines.
  */
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Download,
   Trash2,
   Copy,
   Check,
   Maximize2,
+  ExternalLink,
   FileVideo,
   Clock,
   Layers,
@@ -70,6 +72,7 @@ export function VideoPlayerModal({
   const [mediaToken, setMediaToken] = useState<string | null>(null)
   const [frameToken, setFrameToken] = useState<string | null>(null)
   const [loadingMedia, setLoadingMedia] = useState<boolean>(true)
+  const [isTheaterMode, setIsTheaterMode] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -87,9 +90,19 @@ export function VideoPlayerModal({
     setFrameToken(null)
     setTokenVideoId(null)
 
+    // Use JWT from localStorage directly — no extra API round-trip required
+    const jwt = localStorage.getItem('visiontrace_token')
+    if (jwt) {
+      setMediaToken(jwt)
+      setFrameToken(jwt)
+      setTokenVideoId(video.id)
+      setLoadingMedia(false)
+      return
+    }
+
     let isMounted = true
 
-    // Fetch scoped tokens for video and frames
+    // Fallback: request a scoped media token (120s expiry)
     Promise.allSettled([
       authService.getMediaToken('video', video.id),
       authService.getMediaToken('frame', video.id),
@@ -115,10 +128,32 @@ export function VideoPlayerModal({
   }, [isOpen, video?.id])
 
   useEffect(() => {
-    if (initialTimestamp !== undefined && initialTimestamp !== null && videoRef.current) {
-      videoRef.current.currentTime = initialTimestamp
+    if (!isOpen || initialTimestamp === undefined || initialTimestamp === null) {
+      return
     }
-  }, [initialTimestamp, isOpen])
+
+    const applyTimestamp = () => {
+      if (videoRef.current && Number.isFinite(initialTimestamp)) {
+        videoRef.current.currentTime = initialTimestamp
+      }
+    }
+
+    applyTimestamp()
+    const v = videoRef.current
+    if (v) {
+      v.addEventListener('loadedmetadata', applyTimestamp)
+      v.addEventListener('canplay', applyTimestamp)
+      v.addEventListener('loadeddata', applyTimestamp)
+    }
+
+    return () => {
+      if (v) {
+        v.removeEventListener('loadedmetadata', applyTimestamp)
+        v.removeEventListener('canplay', applyTimestamp)
+        v.removeEventListener('loadeddata', applyTimestamp)
+      }
+    }
+  }, [initialTimestamp, isOpen, mediaToken, tokenVideoId])
 
   useEffect(() => {
     if (!isOpen || !video?.id) {
@@ -193,25 +228,21 @@ export function VideoPlayerModal({
   const baseStreamUrl = videoService.getStreamUrl(video.id)
   const isStreamAuthorized = Boolean(mediaToken && tokenVideoId === video.id)
   const streamUrl = isStreamAuthorized
-    ? `${baseStreamUrl}?media_token=${encodeURIComponent(mediaToken!)}`
+    ? `${baseStreamUrl}?token=${encodeURIComponent(mediaToken!)}`
     : undefined
 
   const handleDownload = async () => {
     if (!video) return
-    try {
-      const token = isStreamAuthorized && mediaToken
-        ? mediaToken
-        : await authService.getMediaToken('video', video.id)
-      const url = `${baseStreamUrl}?media_token=${encodeURIComponent(token)}`
-      const a = document.createElement('a')
-      a.href = url
-      a.download = video.original_filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-    } catch {
-      window.open(baseStreamUrl, '_blank')
-    }
+    const jwt = localStorage.getItem('visiontrace_token') || (isStreamAuthorized && mediaToken ? mediaToken : null)
+    const url = jwt
+      ? `${baseStreamUrl}?token=${encodeURIComponent(jwt)}`
+      : baseStreamUrl
+    const a = document.createElement('a')
+    a.href = url
+    a.download = video.original_filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   const handleCopyId = () => {
@@ -270,10 +301,15 @@ export function VideoPlayerModal({
         isOpen={isOpen}
         onClose={onClose}
         title={video.original_filename}
-        subtitle={`UUID: ${video.id}`}
+        subtitle={
+          initialTimestamp !== undefined && initialTimestamp !== null
+            ? `Target Evidence at ${formatDuration(initialTimestamp)} (${initialTimestamp.toFixed(1)}s) • UUID: ${video.id}`
+            : `UUID: ${video.id}`
+        }
         maxWidth="6xl"
+        className={isTheaterMode ? 'max-w-[96vw] max-h-[96vh]' : ''}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5">
           {/* Left Column: Video Screen & Keyframes (7 cols on desktop) */}
           <div className="lg:col-span-7 flex flex-col space-y-3">
             <div className="relative rounded-xl overflow-hidden bg-black border border-[var(--color-border-2)] aspect-video shadow-2xl flex items-center justify-center group">
@@ -285,6 +321,11 @@ export function VideoPlayerModal({
                   autoPlay
                   playsInline
                   onLoadedMetadata={() => {
+                    if (initialTimestamp !== undefined && initialTimestamp !== null && videoRef.current) {
+                      videoRef.current.currentTime = initialTimestamp
+                    }
+                  }}
+                  onCanPlay={() => {
                     if (initialTimestamp !== undefined && initialTimestamp !== null && videoRef.current) {
                       videoRef.current.currentTime = initialTimestamp
                     }
@@ -311,11 +352,17 @@ export function VideoPlayerModal({
               )}
 
               {/* In-player telemetry overlay */}
-              <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none opacity-85">
+              <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2 pointer-events-none opacity-90 z-10">
                 <Badge variant="telemetry">
                   {getResolutionLabel(video.width, video.height)}
                 </Badge>
                 {video.fps && <Badge variant="telemetry">{video.fps} FPS</Badge>}
+                {initialTimestamp !== undefined && initialTimestamp !== null && (
+                  <span className="px-2.5 py-0.5 rounded bg-emerald-950/90 backdrop-blur-md border border-emerald-500/60 text-[10px] font-mono text-emerald-400 font-bold flex items-center gap-1 shadow-md">
+                    <Clock className="w-3 h-3 text-emerald-400" />
+                    EVIDENCE: {formatDuration(initialTimestamp)} ({initialTimestamp.toFixed(1)}s)
+                  </span>
+                )}
                 {tracks.length > 0 && (
                   <span className="px-2 py-0.5 rounded bg-cyan-950/80 backdrop-blur-md border border-[var(--color-accent)]/50 text-[10px] font-mono text-[var(--color-accent)] font-bold flex items-center gap-1 shadow-sm">
                     <Target className="w-3 h-3 text-[var(--color-accent)]" />
@@ -326,7 +373,7 @@ export function VideoPlayerModal({
             </div>
 
             {/* Quick Player Bar */}
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs font-mono text-[var(--color-text-secondary)]">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs font-mono text-[var(--color-text-secondary)]">
               <div className="flex items-center gap-2 sm:gap-3">
                 <span className="hidden sm:inline">Shortcuts:</span>
                 <kbd className="px-1.5 py-0.5 rounded bg-[var(--color-surface-3)] text-[var(--color-text-primary)] border border-[var(--color-border-2)]">
@@ -340,6 +387,40 @@ export function VideoPlayerModal({
               </div>
 
               <div className="flex items-center gap-2">
+                {initialTimestamp !== undefined && initialTimestamp !== null && (
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => handleSeekToTime(initialTimestamp)}
+                    className="text-emerald-400 border-emerald-500/40 hover:bg-emerald-950/40 text-[11px] font-mono"
+                    title="Jump player back to exact evidence timestamp"
+                  >
+                    <Clock className="w-3 h-3 mr-1" />
+                    Jump to Evidence ({initialTimestamp.toFixed(1)}s)
+                  </Button>
+                )}
+
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => setIsTheaterMode(!isTheaterMode)}
+                  title={isTheaterMode ? 'Switch to standard view' : 'Expand to theater view'}
+                  className="text-xs font-mono text-[var(--color-text-secondary)] hover:text-white"
+                >
+                  <Maximize2 className="w-3.5 h-3.5 mr-1" />
+                  <span className="hidden sm:inline">{isTheaterMode ? 'Standard' : 'Theater'}</span>
+                </Button>
+
+                <Link
+                  to={`/videos/${video.id}${initialTimestamp !== undefined && initialTimestamp !== null ? `?timestamp=${initialTimestamp}` : ''}`}
+                  onClick={onClose}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-[var(--color-border)] text-xs font-mono text-[var(--color-accent)] hover:border-[var(--color-accent)] hover:bg-cyan-950/40 transition-colors"
+                  title="Open in dedicated full-page forensic inspector"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Full Page</span>
+                </Link>
+
                 <Button
                   variant="outline"
                   size="xs"
@@ -377,12 +458,12 @@ export function VideoPlayerModal({
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2.5 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin">
+                <div className="flex items-center gap-2.5 overflow-x-auto pb-2 pt-0.5 overscroll-contain scrollbar-tactical">
                   {frames.map((frame) => {
                     const rawAnnotated = videoService.getAnnotatedFrameUrl(video.id, frame.filename)
-                    const annotatedUrl = frameToken ? `${rawAnnotated}?media_token=${encodeURIComponent(frameToken)}` : undefined
+                    const annotatedUrl = frameToken ? `${rawAnnotated}?token=${encodeURIComponent(frameToken)}` : undefined
                     const rawPreview = frame.preview_url
-                    const previewUrl = frameToken ? `${rawPreview}?media_token=${encodeURIComponent(frameToken)}` : undefined
+                    const previewUrl = frameToken ? `${rawPreview}?token=${encodeURIComponent(frameToken)}` : undefined
                     const frameImgUrl = showAnnotations ? annotatedUrl : previewUrl
 
                     return (
@@ -703,7 +784,11 @@ export function VideoPlayerModal({
                           : 'No tracks match current class filter.'}
                       </div>
                     ) : (
-                      <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                      <div
+                        tabIndex={0}
+                        aria-label="Track directory list"
+                        className="max-h-56 sm:max-h-64 lg:max-h-[280px] overflow-y-auto space-y-1.5 pr-1.5 overscroll-contain scrollbar-tactical scroll-smooth focus:outline-none"
+                      >
                         {filteredTracks.map((trk) => {
                           const isSelected = selectedTrackId === trk.id
                           return (
@@ -749,26 +834,28 @@ export function VideoPlayerModal({
               )}
             </div>
 
-            {/* Delete Action Bar */}
-            <div className="p-4 rounded-xl bg-rose-950/15 border border-rose-500/20 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-mono font-bold text-rose-300">Danger Zone</p>
-                  <p className="text-[10px] text-rose-400/80">
-                    Removes asset, frames, and track records
-                  </p>
+            {/* Delete Action Bar - Only shown in repository view, never in case evidence inspection */}
+            {onDeleteSuccess && (
+              <div className="p-3 rounded-xl bg-rose-950/15 border border-rose-500/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-mono font-bold text-rose-300">Danger Zone</p>
+                    <p className="text-[10px] text-rose-400/80">
+                      Removes asset, frames, and track records
+                    </p>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="xs"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{isDeleting ? 'Deleting…' : 'Delete'}</span>
+                  </Button>
                 </div>
-                <Button
-                  variant="danger"
-                  size="xs"
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>{isDeleting ? 'Deleting…' : 'Delete'}</span>
-                </Button>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </Modal>

@@ -5,6 +5,7 @@ duplicate task suppression, and safe error transitions.
 """
 import logging
 import socket
+import threading
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -46,13 +47,32 @@ def is_broker_available(broker_url: str) -> bool:
         return False
 
 
+def _run_task_in_thread(video_id_str: str) -> None:
+    """
+    Runs process_video_task synchronously in a background thread.
+    Used as a dev-mode fallback when the Celery/Redis broker is unavailable.
+    Uses .run() to bypass Celery's broker and invoke the task body directly.
+    Each invocation opens its own DB session (via SessionLocal inside the task).
+    """
+    try:
+        logger.info("Dev-mode thread: starting inline processing for video %s", video_id_str)
+        process_video_task.run(video_id_str)
+        logger.info("Dev-mode thread: finished inline processing for video %s", video_id_str)
+    except Exception as exc:
+        logger.exception("Dev-mode thread: unhandled error processing video %s: %s", video_id_str, exc)
+
+
 def enqueue_video_processing(video_id: uuid.UUID, db: Session) -> Tuple[bool, Optional[str]]:
     """
     Safely enqueues a video for background processing with Celery.
+
+    In development mode, when the Redis/Celery broker is unavailable, the task
+    is executed directly in a background thread so that processing still works
+    without needing Redis installed locally.
+
     Guarantees:
-    1. If the broker is unreachable, the video remains in 'uploaded' state with an
-       informative message rather than being left in a phantom 'queued' state.
-    2. Atomic status transition: sets status to 'queued' only when task delivery succeeds.
+    1. Atomic status transition: sets status to 'queued' only when task delivery succeeds.
+    2. Never leaves a video stuck in a phantom 'queued' state if delivery fails.
     Returns (success, error_message).
     """
     video = db.scalar(select(Video).where(Video.id == video_id))
@@ -62,8 +82,37 @@ def enqueue_video_processing(video_id: uuid.UUID, db: Session) -> Tuple[bool, Op
     if video.status in ("queued", "processing"):
         return True, "Job is already queued or processing"
 
-    # Fast probe: if broker is offline, do not block the request with TCP timeout
-    if not is_broker_available(settings.celery_broker_url):
+    # Fast probe: check if broker is reachable
+    broker_online = is_broker_available(settings.celery_broker_url)
+
+    # ── Development fallback: run inline in a background thread ─────────────
+    if not broker_online and settings.app_env == "development":
+        video.status = "queued"
+        video.processing_progress = 0.0
+        video.error_message = None
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            return False, "Database error while setting video to queued state."
+
+        video_id_str = str(video_id)
+        thread = threading.Thread(
+            target=_run_task_in_thread,
+            args=(video_id_str,),
+            daemon=True,
+            name=f"vt-process-{video_id_str[:8]}",
+        )
+        thread.start()
+        logger.info(
+            "Dev-mode: Redis broker offline. Running video %s processing in background thread %s.",
+            video_id,
+            thread.name,
+        )
+        return True, None
+
+    # ── Production / broker offline in production: return error ─────────────
+    if not broker_online:
         video.status = "uploaded"
         video.error_message = "Background worker broker unavailable (port 6379 offline). Ready to retry."
         try:
@@ -77,8 +126,8 @@ def enqueue_video_processing(video_id: uuid.UUID, db: Session) -> Tuple[bool, Op
         )
         return False, "Background worker broker unavailable. Ready to retry."
 
+    # ── Happy path: enqueue via Celery ───────────────────────────────────────
     try:
-        # Enqueue the task via Celery apply_async with immediate fail if broker drops
         task = process_video_task.apply_async(args=[str(video_id)], retry=False)
         video.status = "queued"
         video.processing_progress = 0.0
@@ -88,7 +137,6 @@ def enqueue_video_processing(video_id: uuid.UUID, db: Session) -> Tuple[bool, Op
         return True, None
     except Exception as exc:
         db.rollback()
-        # Keep status as 'uploaded' so it remains in a recoverable state
         video.status = "uploaded"
         video.error_message = f"Queue broker unavailable: {str(exc)}. Ready to retry."
         try:

@@ -16,6 +16,7 @@ def test_alembic_configuration():
     assert ini_path.exists(), f"Alembic ini file not found at {ini_path}"
 
     alembic_cfg = Config(str(ini_path))
+    alembic_cfg.set_main_option("script_location", str(ini_path.parent / "alembic"))
     script_dir = ScriptDirectory.from_config(alembic_cfg)
 
     # Verify migration revisions
@@ -31,6 +32,7 @@ def test_migration_functions_defined():
     """Verify that upgrade() and downgrade() functions are properly defined in 001_initial_schema."""
     ini_path = Path(__file__).parent.parent / "alembic.ini"
     alembic_cfg = Config(str(ini_path))
+    alembic_cfg.set_main_option("script_location", str(ini_path.parent / "alembic"))
     script_dir = ScriptDirectory.from_config(alembic_cfg)
     rev = script_dir.get_revision("001_initial_schema")
     module = rev.module

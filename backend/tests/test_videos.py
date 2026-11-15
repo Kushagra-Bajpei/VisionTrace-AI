@@ -112,7 +112,7 @@ def test_upload_and_extract_metadata(client: TestClient):
     data = response.json()
 
     assert data["original_filename"] == "lobby_cam_01.mp4"
-    assert data["status"] == "uploaded"
+    assert data["status"] in ("uploaded", "queued")
     assert data["width"] == 320
     assert data["height"] == 240
     assert data["fps"] == 10.0
@@ -132,7 +132,7 @@ def test_upload_and_extract_metadata(client: TestClient):
     assert stats_res.status_code == 200
     stats = stats_res.json()
     assert stats["total_videos"] >= 1
-    assert stats["uploaded_count"] >= 1
+    assert (stats.get("uploaded_count", 0) + stats.get("queued_count", 0) + stats.get("processing_count", 0)) >= 1
     assert stats["total_duration_seconds"] >= 1.0
 
     # 3. Test thumbnail retrieval
@@ -163,7 +163,8 @@ def test_upload_and_extract_metadata(client: TestClient):
     assert len(search_miss.json()) == 0
 
     # 7. Test status filter
-    status_res = client.get("/api/v1/videos?status=uploaded")
+    current_vid = client.get(f"/api/v1/videos/{video_id}").json()
+    status_res = client.get(f"/api/v1/videos?status={current_vid['status']}")
     assert status_res.status_code == 200
     assert len(status_res.json()) >= 1
 

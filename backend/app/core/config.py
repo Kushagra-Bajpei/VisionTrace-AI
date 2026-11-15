@@ -4,6 +4,7 @@ Uses pydantic-settings to load and validate environment variables.
 """
 from functools import lru_cache
 from pathlib import Path
+from typing import Optional
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,6 +37,10 @@ class Settings(BaseSettings):
         "postgresql+psycopg://visiontrace:visiontrace@localhost:5432/visiontrace_db"
     )
 
+    # ── MongoDB Atlas ─────────────────────────────────────────────────────────
+    mongodb_uri: Optional[str] = None
+    mongodb_database: str = "visiontrace"
+
     # ── Redis & Celery ────────────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/0"
@@ -55,7 +60,10 @@ class Settings(BaseSettings):
 
     # ── AI & Computer Vision Models ───────────────────────────────────────────
     yolo_model_name: str = "yolov8n.pt"
-    yolo_confidence_threshold: float = 0.25
+    yolo_confidence_threshold: float = 0.35
+    yolo_inference_imgsz: int = 1280           # Inference resolution (px). 1280 > 640 for high-res CCTV.
+    yolo_nms_iou_threshold: float = 0.45       # NMS IoU threshold
+    yolo_enable_clahe: bool = True             # Enable CLAHE nighttime preprocessing
     yolo_tracker_config: str = "bytetrack.yaml"
     clip_model_name: str = "ViT-B-32"
     clip_pretrained: str = "openai"

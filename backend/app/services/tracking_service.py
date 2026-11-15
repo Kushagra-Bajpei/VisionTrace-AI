@@ -29,6 +29,20 @@ _ultralytics_temp.mkdir(parents=True, exist_ok=True)
 os.environ["YOLO_CONFIG_DIR"] = str(_ultralytics_temp)
 
 
+def _apply_clahe(frame_bgr: np.ndarray) -> np.ndarray:
+    """
+    Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) on the
+    luminance channel to improve object visibility in low-light/nighttime
+    CCTV footage before YOLO inference.
+    """
+    lab = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2LAB)
+    l_channel, a_channel, b_channel = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l_channel = clahe.apply(l_channel)
+    lab = cv2.merge([l_channel, a_channel, b_channel])
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+
 @dataclass
 class DetectionItem:
     """Single detected bounding box inside a frame."""
@@ -150,11 +164,27 @@ class TrackingService:
 
             # Run YOLO with ByteTrack persistence
             # persist=True retains tracks between consecutive frame calls in this sequence
+            # imgsz=1280 preserves detail in high-resolution CCTV footage
+            # Apply CLAHE preprocessing for low-light/nighttime footage when enabled
+            inference_source = f_path
+            if settings.yolo_enable_clahe:
+                _frame_bgr = cv2.imread(f_path)
+                if _frame_bgr is not None:
+                    _frame_bgr = _apply_clahe(_frame_bgr)
+                    # Write preprocessed frame to a temp file for model.track()
+                    _tmp_path = str(
+                        settings.storage_base / "temp" / "ultralytics" / f"clahe_{Path(f_path).name}"
+                    )
+                    cv2.imwrite(_tmp_path, _frame_bgr)
+                    inference_source = _tmp_path
+
             results = model.track(
-                source=f_path,
+                source=inference_source,
                 tracker=tracker_cfg,
                 persist=True,
                 conf=threshold,
+                imgsz=settings.yolo_inference_imgsz,
+                iou=settings.yolo_nms_iou_threshold,
                 verbose=False,
             )
 

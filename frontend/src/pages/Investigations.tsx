@@ -18,12 +18,14 @@ import {
   CheckCircle2,
   AlertTriangle,
   RotateCw,
+  Trash2,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Loading'
+import { useAuth } from '@/context/AuthContext'
 import { investigationService } from '@/services/investigation'
 import { formatDateTime } from '@/lib/utils'
 import type { CasePriority, CaseStatus, InvestigationCase } from '@/types'
@@ -39,11 +41,13 @@ const STATUS_TABS: Array<{ label: string; value: string }> = [
 export function InvestigationsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { canDeleteCase } = useAuth()
 
   const [activeStatus, setActiveStatus] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false)
+  const [caseToDelete, setCaseToDelete] = useState<InvestigationCase | null>(null)
 
   // Form state
   const [newTitle, setNewTitle] = useState('')
@@ -75,6 +79,14 @@ export function InvestigationsPage() {
       setNewDesc('')
       setNewTagsStr('')
       navigate(`/investigations/${newCase.id}`)
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => investigationService.deleteCase(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cases'] })
+      setCaseToDelete(null)
     },
   })
 
@@ -262,9 +274,24 @@ export function InvestigationsPage() {
                     {getStatusBadge(caseItem.status)}
                     {getPriorityBadge(caseItem.priority)}
                   </div>
-                  <div className="flex items-center text-[10px] font-mono text-[var(--color-text-muted)]">
-                    <Clock className="w-3 h-3 mr-1" />
-                    {formatDateTime(caseItem.updated_at)}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center text-[10px] font-mono text-[var(--color-text-muted)]">
+                      <Clock className="w-3 h-3 mr-1" />
+                      {formatDateTime(caseItem.updated_at)}
+                    </div>
+                    {canDeleteCase(caseItem) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setCaseToDelete(caseItem)
+                        }}
+                        className="p-1 rounded text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+                        title="Delete investigation case"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -407,6 +434,41 @@ export function InvestigationsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* ── Delete Confirmation Modal ── */}
+      <Modal
+        isOpen={Boolean(caseToDelete)}
+        onClose={() => setCaseToDelete(null)}
+        title="Delete Investigation Case"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            Are you sure you want to permanently delete{' '}
+            <strong className="text-white">&ldquo;{caseToDelete?.title}&rdquo;</strong>?
+          </p>
+          <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-900/40 text-xs text-amber-200">
+            <strong>Data Safety Guarantee:</strong> Deleting this investigation case removes associated evidence milestones and case notes. Raw source surveillance videos and AI object detections remain preserved in your archive.
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCaseToDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => caseToDelete && deleteMutation.mutate(caseToDelete.id)}
+              disabled={deleteMutation.isPending}
+              className="bg-red-500 hover:bg-red-600 text-white font-semibold"
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Case Permanently'}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

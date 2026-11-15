@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { videoService } from '@/services/video'
 import { authService } from '@/services/auth'
-import { formatBytes, formatDuration, formatDateTime, getResolutionLabel } from '@/lib/utils'
+import { formatBytes, formatDuration, formatDateTime, getResolutionLabel, withAuthToken } from '@/lib/utils'
 import type { Video } from '@/types'
 
 interface VideoTableViewProps {
@@ -18,18 +18,18 @@ interface VideoTableViewProps {
 
 export function VideoTableView({ videos, onPlay, onDelete, onProcess }: VideoTableViewProps) {
   const handleDownload = async (video: Video) => {
-    try {
-      const token = await authService.getMediaToken('video', video.id)
-      const baseStreamUrl = videoService.getStreamUrl(video.id)
-      const url = `${baseStreamUrl}?media_token=${encodeURIComponent(token)}`
+    const baseStreamUrl = videoService.getStreamUrl(video.id)
+    const jwt = localStorage.getItem('visiontrace_token')
+    if (jwt) {
+      const url = `${baseStreamUrl}?token=${encodeURIComponent(jwt)}`
       const a = document.createElement('a')
       a.href = url
       a.download = video.original_filename
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-    } catch {
-      window.open(videoService.getStreamUrl(video.id), '_blank')
+    } else {
+      window.open(baseStreamUrl, '_blank')
     }
   }
   return (
@@ -52,7 +52,7 @@ export function VideoTableView({ videos, onPlay, onDelete, onProcess }: VideoTab
           <tbody className="divide-y divide-[var(--color-border)]">
             {videos.map((video) => {
               const thumbUrl = video.thumbnail_path
-                ? videoService.getThumbnailUrl(video.id)
+                ? withAuthToken(videoService.getThumbnailUrl(video.id))
                 : null
 
               return (

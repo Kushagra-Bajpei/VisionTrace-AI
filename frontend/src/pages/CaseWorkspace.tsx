@@ -44,7 +44,7 @@ import { investigationService } from '@/services/investigation'
 import { videoService } from '@/services/video'
 import { authService } from '@/services/auth'
 import { useAuth } from '@/context/AuthContext'
-import { formatDateTime, formatDuration } from '@/lib/utils'
+import { formatDateTime, formatDuration, withAuthToken } from '@/lib/utils'
 import type {
   CasePriority,
   CaseReport,
@@ -110,11 +110,26 @@ export function CaseWorkspacePage() {
 
   const handleDownloadReportWithToken = async (reportId: string, downloadUrl: string) => {
     try {
-      const mediaToken = await authService.getMediaToken('report', reportId)
-      const secureUrl = `${downloadUrl}?media_token=${encodeURIComponent(mediaToken)}`
-      window.open(secureUrl, '_blank')
+      let secureUrl = downloadUrl
+      if (!secureUrl.includes('media_token=')) {
+        const mediaToken = await authService.getMediaToken('report', reportId)
+        const sep = secureUrl.includes('?') ? '&' : '?'
+        secureUrl = `${secureUrl}${sep}media_token=${encodeURIComponent(mediaToken)}`
+      }
+      const a = document.createElement('a')
+      a.href = secureUrl
+      a.target = '_blank'
+      a.download = `forensic_report_${reportId.slice(0, 8)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
     } catch {
-      window.open(downloadUrl, '_blank')
+      const userToken = authService.getToken()
+      const sep = downloadUrl.includes('?') ? '&' : '?'
+      const fallbackUrl = userToken
+        ? `${downloadUrl}${sep}token=${encodeURIComponent(userToken)}`
+        : downloadUrl
+      window.open(fallbackUrl, '_blank')
     }
   }
 
@@ -196,29 +211,35 @@ export function CaseWorkspacePage() {
         custom_notes: reportNotes.trim() || undefined,
         include_evidence_thumbnails: true,
       }),
-    onSuccess: (report) => {
+    onSuccess: async (report) => {
       queryClient.invalidateQueries({ queryKey: ['case-reports', caseId] })
       setIsReportModalOpen(false)
       setActiveTab('reports')
       if (report.download_url) {
-        window.open(report.download_url, '_blank')
+        await handleDownloadReportWithToken(report.id, report.download_url)
       }
     },
   })
 
   // Handlers
-  const handleOpenPlayer = async (item: InvestigationEvidence) => {
-    setIsLoadingPlayerVideo(true)
-    try {
-      const vid = await videoService.getVideo(item.video_id)
-      setPlayerVideo(vid)
-      setPlayerTimestamp(item.timestamp)
-      setIsPlayerOpen(true)
-    } catch (e) {
-      console.error('Failed to load video for playback:', e)
-    } finally {
-      setIsLoadingPlayerVideo(false)
+  const handleOpenPlayer = (item: InvestigationEvidence) => {
+    const params = new URLSearchParams()
+    if (item.timestamp !== undefined && item.timestamp !== null) {
+      params.set('timestamp', item.timestamp.toString())
     }
+    if (caseId) {
+      params.set('caseId', caseId)
+    }
+    if (caseData?.title) {
+      params.set('caseTitle', caseData.title)
+    }
+    if (item.id) {
+      params.set('evidenceId', item.id)
+    }
+    if (item.object_class) {
+      params.set('objectClass', item.object_class)
+    }
+    navigate(`/videos/${item.video_id}?${params.toString()}`)
   }
 
   const handleStartEditNote = (item: InvestigationEvidence) => {
@@ -542,13 +563,13 @@ export function CaseWorkspacePage() {
                           <div className="w-full sm:w-44 h-28 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] overflow-hidden shrink-0 relative flex items-center justify-center">
                             {item.crop_url ? (
                               <img
-                                src={item.crop_url}
+                                src={withAuthToken(item.crop_url)}
                                 alt="Detection crop"
                                 className="w-full h-full object-contain bg-black/40"
                               />
                             ) : item.frame_url ? (
                               <img
-                                src={item.frame_url}
+                                src={withAuthToken(item.frame_url)}
                                 alt="Frame preview"
                                 className="w-full h-full object-cover"
                               />

@@ -10,6 +10,7 @@ from fastapi import APIRouter
 
 from app.core.config import get_settings
 from app.core.database import check_db_connection
+from app.db.mongodb import ping_mongo
 
 router = APIRouter()
 settings = get_settings()
@@ -43,12 +44,21 @@ async def health_check_detailed():
     """
     db_connected, db_msg = check_db_connection()
 
+    mongo_ok, mongo_msg, mongo_latency = await ping_mongo()
+
     db_status = {
         "status": "ok" if db_connected else "unreachable",
         "details": db_msg,
     }
 
-    overall_status = "ok" if db_connected else "degraded"
+    mongo_status = {
+        "status": "ok" if mongo_ok else "unreachable",
+        "details": mongo_msg,
+        "latency_ms": mongo_latency,
+        "database": settings.mongodb_database or "visiontrace",
+    }
+
+    overall_status = "ok" if (db_connected or mongo_ok) else "degraded"
 
     return {
         "status": overall_status,
@@ -59,6 +69,7 @@ async def health_check_detailed():
         "subsystems": {
             "api": {"status": "ok"},
             "database": db_status,
+            "mongodb": mongo_status,
             "redis": {
                 "status": "not_configured",
                 "note": "Redis integration added in Phase 4",
@@ -72,4 +83,20 @@ async def health_check_detailed():
             "python": sys.version,
             "platform": platform.platform(),
         },
+    }
+
+
+@router.get("/health/mongodb")
+async def health_check_mongodb():
+    """
+    Dedicated MongoDB Atlas connection probe.
+    Pings MongoDB Atlas cluster and returns latency and collection status.
+    """
+    is_ok, msg, latency = await ping_mongo()
+    return {
+        "status": "ok" if is_ok else "error",
+        "database": settings.mongodb_database or "visiontrace",
+        "details": msg,
+        "latency_ms": latency,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }

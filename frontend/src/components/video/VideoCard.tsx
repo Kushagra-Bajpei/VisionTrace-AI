@@ -7,7 +7,7 @@ import { Play, MoreVertical, Download, Trash2, Maximize2, FileVideo, RotateCw, T
 import { Badge } from '@/components/ui/Badge'
 import { videoService } from '@/services/video'
 import { authService } from '@/services/auth'
-import { formatBytes, formatDuration, formatRelativeTime, getResolutionLabel } from '@/lib/utils'
+import { formatBytes, formatDuration, formatRelativeTime, getResolutionLabel, withAuthToken } from '@/lib/utils'
 import type { Video } from '@/types'
 
 interface VideoCardProps {
@@ -22,24 +22,24 @@ export function VideoCard({ video, onPlay, onDelete, onProcess }: VideoCardProps
   const [thumbError, setThumbError] = useState(false)
 
   const thumbnailUrl = video.thumbnail_path
-    ? videoService.getThumbnailUrl(video.id)
+    ? withAuthToken(videoService.getThumbnailUrl(video.id))
     : null
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation()
     setMenuOpen(false)
-    try {
-      const token = await authService.getMediaToken('video', video.id)
-      const baseStreamUrl = videoService.getStreamUrl(video.id)
-      const url = `${baseStreamUrl}?media_token=${encodeURIComponent(token)}`
+    const baseStreamUrl = videoService.getStreamUrl(video.id)
+    const jwt = localStorage.getItem('visiontrace_token')
+    if (jwt) {
+      const url = `${baseStreamUrl}?token=${encodeURIComponent(jwt)}`
       const a = document.createElement('a')
       a.href = url
       a.download = video.original_filename
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-    } catch {
-      window.open(videoService.getStreamUrl(video.id), '_blank')
+    } else {
+      window.open(baseStreamUrl, '_blank')
     }
   }
 

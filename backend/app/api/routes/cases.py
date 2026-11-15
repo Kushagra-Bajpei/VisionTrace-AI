@@ -40,6 +40,7 @@ from app.schemas.report import ReportGenerateRequest, ReportResponse
 from app.services.audit_service import AuditService
 from app.services.integrity_service import IntegrityService
 from app.services.report_service import InvestigationReportService
+from app.core.security import create_media_token, DEFAULT_MEDIA_TOKEN_EXPIRE_SECONDS
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -789,7 +790,13 @@ def generate_case_report(
         },
     )
 
-    download_url = f"/api/v1/cases/{case_id}/reports/{report.id}/download"
+    media_tok = create_media_token(
+        user_id=current_user.id,
+        resource_type="report",
+        resource_id=str(report.id),
+        expires_in_seconds=DEFAULT_MEDIA_TOKEN_EXPIRE_SECONDS,
+    )
+    download_url = f"/api/v1/cases/{case_id}/reports/{report.id}/download?media_token={media_tok}"
     resp = ReportResponse.model_validate(report)
     resp.download_url = download_url
     return resp
@@ -831,6 +838,7 @@ def download_report(
     report_id: uuid.UUID,
     request: Request,
     media_token: Optional[str] = Query(None, description="Short-lived scoped media token"),
+    token: Optional[str] = Query(None, description="Standard user session token"),
     authorization: Optional[str] = Header(None, description="Standard Bearer token"),
     db: Session = Depends(get_db),
 ):
@@ -840,6 +848,7 @@ def download_report(
         resource_id=report_id,
         request=request,
         media_token=media_token,
+        token=token,
         authorization=authorization,
         db=db,
     )

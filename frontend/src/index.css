@@ -64,23 +64,53 @@ body {
   background-size: 32px 32px;
 }
 
-/* ── Enterprise Scrollbar ───────────────────────────────────────────────── */
+/* ── Universal Enterprise Scrollbar ─────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-2) transparent;
+}
+
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-surface);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--color-border-2);
-  border-radius: 2px;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: var(--color-accent-dim);
+}
+
+.scrollbar-tactical {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-2) var(--color-surface-2);
+}
+
+.scrollbar-tactical::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-tactical::-webkit-scrollbar-track {
+  background: var(--color-surface-2);
+  border-radius: 4px;
+}
+
+.scrollbar-tactical::-webkit-scrollbar-thumb {
+  background: var(--color-border-2);
+  border-radius: 4px;
+  border: 1px solid var(--color-surface-3);
+}
+
+.scrollbar-tactical::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-dim);
 }
 
 /* ── Focus Outline ──────────────────────────────────────────────────────── */

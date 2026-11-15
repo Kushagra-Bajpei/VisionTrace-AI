@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { AppLayout } from '@/layouts/AppLayout'
 import { DashboardPage } from '@/pages/Dashboard'
 import { VideoLibraryPage } from '@/pages/VideoLibrary'
+import { VideoDetailPage } from '@/pages/VideoDetailPage'
 import { AISearchPage } from '@/pages/AISearch'
 import { InvestigationsPage } from '@/pages/Investigations'
 import { CaseWorkspacePage } from '@/pages/CaseWorkspace'
@@ -56,6 +57,7 @@ function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="videos" element={<VideoLibraryPage />} />
+          <Route path="videos/:videoId" element={<VideoDetailPage />} />
           <Route path="search" element={<AISearchPage />} />
           <Route path="investigations" element={<InvestigationsPage />} />
           <Route path="investigations/:caseId" element={<CaseWorkspacePage />} />

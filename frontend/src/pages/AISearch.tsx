@@ -33,7 +33,7 @@ import { VideoPlayerModal } from '@/components/video/VideoPlayerModal'
 import { searchService } from '@/services/search'
 import { videoService } from '@/services/video'
 import { investigationService } from '@/services/investigation'
-import { formatDuration, getResolutionLabel } from '@/lib/utils'
+import { formatDuration, getResolutionLabel, withAuthToken } from '@/lib/utils'
 import type {
   InvestigationCase,
   SearchQueryResponse,
@@ -99,9 +99,11 @@ export function AISearchPage() {
     }
   }, [initialQuery])
 
-  const executeSearch = async (queryText: string) => {
+  const executeSearch = async (queryText: string, visualOverride?: boolean) => {
     const q = queryText.trim()
     if (!q) return
+
+    const useVisual = visualOverride !== undefined ? visualOverride : visualSearchEnabled
 
     setLoading(true)
     setError(null)
@@ -113,7 +115,7 @@ export function AISearchPage() {
         video_id: selectedVideoId || undefined,
         object_class: selectedClass || undefined,
         min_confidence: minConfidence,
-        visual_search: visualSearchEnabled,
+        visual_search: useVisual,
         limit: 100,
       })
       setResults(data)
@@ -340,16 +342,22 @@ export function AISearchPage() {
             {/* Visual Similarity Mode Toggle */}
             <button
               type="button"
-              onClick={() => setVisualSearchEnabled(!visualSearchEnabled)}
+              onClick={() => {
+                const next = !visualSearchEnabled
+                setVisualSearchEnabled(next)
+                if (query.trim()) {
+                  executeSearch(query, next)
+                }
+              }}
               className={`px-3 py-2.5 rounded-lg border text-xs font-mono flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                 visualSearchEnabled
-                  ? 'bg-cyan-950/80 border-cyan-700/60 text-[var(--color-accent)]'
-                  : 'bg-[var(--color-surface-2)] border-[var(--color-border)] text-[var(--color-text-muted)]'
+                  ? 'bg-cyan-950/80 border-cyan-700/60 text-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/30'
+                  : 'bg-[var(--color-surface-2)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-white'
               }`}
-              title="Toggle CLIP Visual Similarity Ranking"
+              title={visualSearchEnabled ? 'CLIP Visual AI Ranking is ON - Click to disable' : 'CLIP Visual AI Ranking is OFF - Click to enable'}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Visual CLIP</span>
+              <Sparkles className={`w-3.5 h-3.5 ${visualSearchEnabled ? 'text-[var(--color-accent)]' : ''}`} />
+              <span>{visualSearchEnabled ? 'Visual CLIP: ON' : 'Visual CLIP: OFF'}</span>
             </button>
 
             <Button
@@ -498,7 +506,7 @@ export function AISearchPage() {
                   <div className="relative aspect-video bg-black overflow-hidden flex items-center justify-center">
                     {det.annotated_frame_url ? (
                       <img
-                        src={det.annotated_frame_url}
+                        src={withAuthToken(det.annotated_frame_url)}
                         alt={`${det.object_class} detection`}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         loading="lazy"
@@ -513,7 +521,7 @@ export function AISearchPage() {
                     {det.crop_image_url && (
                       <div className="absolute bottom-2 left-2 w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 border-[var(--color-accent)] bg-black/90 shadow-2xl z-10 group/crop">
                         <img
-                          src={det.crop_image_url}
+                          src={withAuthToken(det.crop_image_url)}
                           alt="Cropped target"
                           className="w-full h-full object-cover group-hover/crop:scale-110 transition-transform"
                           loading="lazy"
@@ -560,15 +568,41 @@ export function AISearchPage() {
                       Match score based on CLIP vision-language alignment against query "{query}".
                     </div>
 
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={() => handleOpenEvidence(det.video_id, det.timestamp)}
-                      className="w-full gap-1.5 justify-center font-mono text-xs text-[var(--color-accent)] border-cyan-800/50 hover:bg-cyan-950/40 cursor-pointer"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>View Evidence (Seek {formatDuration(det.timestamp)})</span>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() => handleOpenEvidence(det.video_id, det.timestamp)}
+                        className="flex-1 gap-1.5 justify-center font-mono text-xs text-[var(--color-accent)] border-cyan-800/50 hover:bg-cyan-950/40 cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>View Evidence (Seek {formatDuration(det.timestamp)})</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() =>
+                          handleOpenAddToCase({
+                            video_id: det.video_id,
+                            timestamp: det.timestamp,
+                            event_id: det.id,
+                            track_id: det.track_id,
+                            object_class: det.object_class,
+                            confidence: det.confidence,
+                            visual_similarity_score: det.visual_similarity_score,
+                            frame_path: det.frame_path,
+                            crop_path: det.crop_image_url,
+                            evidence_type: 'detection',
+                            video_name: det.video_name,
+                          })
+                        }
+                        className="text-xs border border-[var(--color-border)] hover:border-[var(--color-accent)] text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] px-2.5 h-7"
+                        title="Add to Investigation Case"
+                      >
+                        <FolderPlus className="w-3.5 h-3.5 mr-1" />
+                        Case
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -667,7 +701,7 @@ export function AISearchPage() {
                   <div className="relative aspect-video bg-black overflow-hidden">
                     {det.annotated_frame_url ? (
                       <img
-                        src={det.annotated_frame_url}
+                        src={withAuthToken(det.annotated_frame_url)}
                         alt={`${det.object_class} detection`}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         loading="lazy"
@@ -903,7 +937,7 @@ export function AISearchPage() {
                         >
                           {thumbUrl ? (
                             <img
-                              src={thumbUrl}
+                              src={withAuthToken(thumbUrl)}
                               alt={v.original_filename}
                               className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
                             />

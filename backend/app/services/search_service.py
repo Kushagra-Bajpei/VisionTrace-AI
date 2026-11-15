@@ -276,7 +276,7 @@ class NaturalLanguageSearchEngine:
             visual_descriptors.append(f"{color} {item}")
 
         parsed.visual_descriptors = visual_descriptors
-        if enable_visual_search and (len(visual_descriptors) > 0 or len(q.split()) >= 3):
+        if enable_visual_search:
             parsed.is_visual_search = True
 
         # 7. Unsupported Facets (Biometrics, Speed Radar, ALPR, verified attributes)

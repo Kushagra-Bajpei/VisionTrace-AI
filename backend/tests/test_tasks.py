@@ -201,8 +201,13 @@ def test_missing_video_file_failure(monkeypatch):
     db2.close()
 
 
-def test_enqueue_broker_unavailable_graceful_recovery():
-    """Verify that if Celery broker is unavailable, video stays 'uploaded' with actionable retry message."""
+def test_enqueue_broker_unavailable_graceful_recovery(monkeypatch):
+    """
+    Verify broker-offline behaviour:
+    - In development mode: falls back to background thread (success=True, status='queued').
+    - In production mode: returns success=False and keeps status='uploaded'.
+    - On mid-publish broker drop (apply_async raises): keeps status='uploaded'.
+    """
     db = TestingSessionLocal()
     video = Video(
         filename="offline_broker.mp4",
@@ -216,19 +221,44 @@ def test_enqueue_broker_unavailable_graceful_recovery():
     db.commit()
     db.refresh(video)
 
-    # 1. Simulate fast broker offline probe (port 6379 not listening)
+    # 1. Dev mode + broker offline → thread fallback: success=True, status='queued'
+    with patch("app.tasks.video_tasks.is_broker_available", return_value=False), \
+         patch("app.tasks.video_tasks.threading.Thread") as mock_thread_cls:
+        mock_thread = mock_thread_cls.return_value
+        success, err = enqueue_video_processing(video.id, db)
+        assert success is True
+        assert err is None
+        mock_thread.start.assert_called_once()
+
+    db.refresh(video)
+    assert video.status == "queued"
+
+    # Reset video status for the next scenario
+    video.status = "uploaded"
+    video.error_message = None
+    db.commit()
+    db.refresh(video)
+
+    # 2. Production mode + broker offline → returns error, status stays 'uploaded'
+    monkeypatch.setattr("app.tasks.video_tasks.settings.app_env", "production")
     with patch("app.tasks.video_tasks.is_broker_available", return_value=False):
         success, err = enqueue_video_processing(video.id, db)
         assert success is False
         assert "broker unavailable" in err.lower()
 
     db.refresh(video)
-    # Architectural requirement 1: Never leave in phantom 'queued' state
     assert video.status == "uploaded"
     assert "broker unavailable" in video.error_message.lower()
     assert "Ready to retry" in video.error_message
 
-    # 2. Simulate broker connection drop during publish
+    # Restore to development for next scenario
+    monkeypatch.setattr("app.tasks.video_tasks.settings.app_env", "development")
+    video.status = "uploaded"
+    video.error_message = None
+    db.commit()
+    db.refresh(video)
+
+    # 3. Broker reports online but apply_async fails mid-publish → error, status 'uploaded'
     with patch("app.tasks.video_tasks.is_broker_available", return_value=True), patch(
         "app.tasks.video_tasks.process_video_task.apply_async",
         side_effect=Exception("Redis connection refused"),

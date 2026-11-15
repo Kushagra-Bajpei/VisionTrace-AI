@@ -242,6 +242,7 @@ def stream_video(
     request: Request,
     range: Optional[str] = Header(None),
     media_token: Optional[str] = Query(None, description="Short-lived scoped media token"),
+    token: Optional[str] = Query(None, description="Standard JWT access token query parameter"),
     authorization: Optional[str] = Header(None, description="Standard Bearer token"),
     db: Session = Depends(get_db),
 ):
@@ -255,6 +256,7 @@ def stream_video(
         resource_id=video_id,
         request=request,
         media_token=media_token,
+        token=token,
         authorization=authorization,
         db=db,
     )
@@ -279,16 +281,18 @@ def get_video_thumbnail(
     video_id: uuid.UUID,
     request: Request,
     media_token: Optional[str] = Query(None),
+    token: Optional[str] = Query(None),
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
     """Serve the generated thumbnail image with path traversal guards and optional media validation."""
-    if authorization or media_token:
+    if authorization or media_token or token:
         validate_media_request(
             resource_type="video",
             resource_id=video_id,
             request=request,
             media_token=media_token,
+            token=token,
             authorization=authorization,
             db=db,
         )
@@ -431,6 +435,7 @@ def get_extracted_frame_file(
     frame_filename: str,
     request: Request,
     media_token: Optional[str] = Query(None, description="Short-lived scoped media token"),
+    token: Optional[str] = Query(None, description="Standard JWT access token query parameter"),
     authorization: Optional[str] = Header(None, description="Standard Bearer token"),
     db: Session = Depends(get_db),
 ):
@@ -444,6 +449,7 @@ def get_extracted_frame_file(
         resource_id=video_id,
         request=request,
         media_token=media_token,
+        token=token,
         authorization=authorization,
         db=db,
     )
@@ -482,6 +488,7 @@ def get_cropped_detection_image(
     crop_filename: str,
     request: Request,
     media_token: Optional[str] = Query(None, description="Short-lived scoped media token"),
+    token: Optional[str] = Query(None, description="Standard JWT access token query parameter"),
     authorization: Optional[str] = Header(None, description="Standard Bearer token"),
     db: Session = Depends(get_db),
 ):
@@ -494,6 +501,7 @@ def get_cropped_detection_image(
         resource_id=video_id,
         request=request,
         media_token=media_token,
+        token=token,
         authorization=authorization,
         db=db,
     )
@@ -684,6 +692,7 @@ def get_annotated_frame_image(
     frame_filename: str,
     request: Request,
     media_token: Optional[str] = Query(None, description="Short-lived scoped media token"),
+    token: Optional[str] = Query(None, description="Standard JWT access token query parameter"),
     authorization: Optional[str] = Header(None, description="Standard Bearer token"),
     db: Session = Depends(get_db),
 ):
@@ -696,6 +705,7 @@ def get_annotated_frame_image(
         resource_id=video_id,
         request=request,
         media_token=media_token,
+        token=token,
         authorization=authorization,
         db=db,
     )
